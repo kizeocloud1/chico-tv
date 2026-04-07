@@ -3,677 +3,256 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Chico TV - Stream en vivo</title>
-    <!-- Shaka Player (soporta DASH, HLS, ClearKey DRM) -->
+    <title>Chico TV - Stream</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mux.js/6.0.1/mux.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/shaka-player@4.7.10/dist/shaka-player.compiled.js"></script>
+
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            user-select: none; /* mejor para TV */
-        }
+        /* Estética Dark Mode Profesional */
+        * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; }
+        body { background: #0a0a0a; font-family: 'Segoe UI', Roboto, sans-serif; color: #fff; overflow-x: hidden; }
+        .app { max-width: 1600px; margin: 0 auto; padding: 1rem; }
 
-        body {
-            background: #0a0a0a;
-            font-family: 'Segoe UI', Roboto, system-ui, -apple-system, 'Helvetica Neue', sans-serif;
-            color: #fff;
-            overflow-x: hidden;
-        }
-
-        /* Contenedor principal */
-        .app {
-            max-width: 1600px;
-            margin: 0 auto;
-            padding: 1rem;
-        }
-
-        /* HEADER */
+        /* Header Estilizado */
         .header {
             display: flex;
-            align-items: baseline;
+            align-items: center;
             justify-content: space-between;
-            flex-wrap: wrap;
-            gap: 1rem;
             margin-bottom: 1.5rem;
             border-bottom: 2px solid #2c2c2c;
             padding-bottom: 0.75rem;
         }
         .logo {
-            font-size: 2rem;
+            font-size: 1.8rem;
             font-weight: 800;
             background: linear-gradient(135deg, #E50914, #FF6B00);
             -webkit-background-clip: text;
             background-clip: text;
             color: transparent;
-            letter-spacing: -0.5px;
         }
-        .logo span {
-            font-size: 1.2rem;
-            color: #aaa;
-        }
-        .status {
-            font-size: 0.8rem;
-            background: #1f1f1f;
-            padding: 0.3rem 0.8rem;
-            border-radius: 30px;
-            color: #0f0;
-        }
+        .status { font-size: 0.75rem; color: #0f0; background: #1a1a1a; padding: 4px 12px; border-radius: 20px; }
 
-        /* NAV categorías horizontal (optimizado para control remoto) */
+        /* Categorías (Navegación horizontal) */
         .categories {
             display: flex;
-            flex-wrap: nowrap;
+            gap: 10px;
             overflow-x: auto;
-            gap: 0.6rem;
-            padding: 0.5rem 0 1rem 0;
-            scrollbar-width: thin;
-            -webkit-overflow-scrolling: touch;
+            padding-bottom: 15px;
+            scrollbar-width: none;
         }
-        .category-btn {
+        .categories::-webkit-scrollbar { display: none; }
+        .cat-btn {
             background: #1e1e1e;
-            border: none;
-            color: #eee;
-            padding: 0.6rem 1.4rem;
-            border-radius: 40px;
-            font-size: 1rem;
-            font-weight: 500;
-            white-space: nowrap;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            flex-shrink: 0;
-            outline: none;
             border: 1px solid #333;
+            color: #ccc;
+            padding: 8px 20px;
+            border-radius: 25px;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: 0.3s;
         }
-        .category-btn:focus-visible, .category-btn.active {
+        .cat-btn.active, .cat-btn:focus {
             background: #E50914;
-            color: white;
+            color: #fff;
             border-color: #E50914;
-            transform: scale(1.02);
-            box-shadow: 0 0 0 3px rgba(229,9,20,0.5);
-        }
-        .category-btn:hover {
-            background: #333;
+            outline: none;
         }
 
-        /* Grilla de canales */
-        .channels-grid {
+        /* Grilla de Canales */
+        .grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(150px, 180px));
-            gap: 1rem;
-            margin: 1.5rem 0;
-            justify-content: center;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
         }
-        .channel-card {
+        .card {
             background: #141414;
-            border-radius: 16px;
+            border-radius: 12px;
             overflow: hidden;
             cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
-            border: 1px solid #2a2a2a;
+            border: 1px solid #222;
+            transition: transform 0.2s;
+        }
+        .card:focus, .card.active {
+            transform: scale(1.05);
+            border-color: #E50914;
             outline: none;
         }
-        .channel-card:focus-visible {
-            transform: scale(1.02);
-            box-shadow: 0 0 0 3px #E50914;
-            border-color: #E50914;
-        }
-        .channel-card.active-channel {
-            border: 2px solid #E50914;
-            background: #1f1f1f;
-        }
-        .channel-img {
-            width: 100%;
-            aspect-ratio: 16 / 9;
-            object-fit: cover;
-            background: #2a2a2a;
-            display: block;
-        }
-        .channel-name {
-            padding: 0.6rem 0.4rem;
-            font-size: 0.85rem;
-            font-weight: 500;
-            text-align: center;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            background: #0f0f0f;
-        }
+        .card img { width: 100%; aspect-ratio: 16/9; object-fit: cover; background: #222; }
+        .card-name { padding: 8px; font-size: 0.8rem; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
         /* Reproductor */
-        .player-container {
+        .player-box {
             background: #000;
-            border-radius: 24px;
+            border-radius: 20px;
             overflow: hidden;
-            margin: 1rem 0;
             position: relative;
-            aspect-ratio: 16 / 9;
-            width: 100%;
-            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5);
+            aspect-ratio: 16/9;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.8);
         }
-        #video-player {
-            width: 100%;
-            height: 100%;
-            background: #000;
-        }
-        .loading-overlay {
+        video { width: 100%; height: 100%; }
+        
+        .overlay {
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.7);
-            display: flex;
+            display: none;
             align-items: center;
             justify-content: center;
-            z-index: 10;
-            backdrop-filter: blur(4px);
-            border-radius: 24px;
+            z-index: 5;
         }
-        .spinner {
-            width: 48px;
-            height: 48px;
-            border: 5px solid #333;
-            border-top: 5px solid #E50914;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .error-msg {
-            background: #ff4d4d20;
-            color: #ff9e9e;
-            padding: 0.8rem;
-            border-radius: 12px;
-            margin: 1rem 0;
-            font-size: 0.9rem;
-            text-align: center;
-        }
-        .info-bar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin: 0.5rem 0;
-            font-size: 0.8rem;
-            color: #aaa;
-        }
-        /* responsive para móvil */
-        @media (max-width: 640px) {
-            .app { padding: 0.8rem; }
-            .channels-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 140px)); gap: 0.7rem; }
-            .channel-name { font-size: 0.7rem; }
-            .category-btn { padding: 0.4rem 1rem; font-size: 0.8rem; }
-            .logo { font-size: 1.5rem; }
-        }
-        /* para TV: botones grandes y foco */
-        @media (pointer: coarse) {
-            .channel-card { cursor: pointer; }
-            .category-btn { padding: 0.7rem 1.2rem; }
-        }
-        footer {
-            text-align: center;
-            font-size: 0.7rem;
-            color: #555;
-            margin-top: 2rem;
-            padding: 1rem;
-        }
+        .spinner { width: 40px; height: 40px; border: 4px solid #333; border-top-color: #E50914; border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .error-box { color: #ff6b6b; font-size: 0.9rem; text-align: center; margin-top: 10px; display: none; }
+        
+        footer { text-align: center; padding: 2rem; color: #444; font-size: 0.7rem; }
     </style>
 </head>
 <body>
+
 <div class="app">
     <div class="header">
-        <div class="logo">CHICO TV <span>stream libre</span></div>
-        <div class="status" id="connectionStatus">📡 cargando canales...</div>
+        <div class="logo">CHICO TV</div>
+        <div id="loadingStatus" class="status">Sincronizando...</div>
     </div>
 
-    <!-- Navegación categorías -->
-    <div id="categoriesContainer" class="categories"></div>
+    <div id="catContainer" class="categories"></div>
+    <div id="chanGrid" class="grid"></div>
 
-    <!-- Grilla de canales -->
-    <div id="channelsGrid" class="channels-grid"></div>
-
-    <!-- Reproductor con overlay de carga -->
-    <div class="player-container" id="playerContainer">
-        <video id="video-player" controls autoplay playsinline disablePictureInPicture></video>
-        <div id="loadingOverlay" class="loading-overlay" style="display: none;">
-            <div class="spinner"></div>
-        </div>
+    <div class="player-box">
+        <video id="video" controls autoplay playsinline></video>
+        <div id="loader" class="overlay"><div class="spinner"></div></div>
     </div>
-    <div id="playerInfo" class="info-bar">
-        <span id="currentChannelName">⚡ Selecciona un canal</span>
-        <span id="drmStatus"></span>
-    </div>
-    <div id="errorMessage" class="error-msg" style="display: none;"></div>
-    <footer>🔓 Contenido actualizado desde GitHub · Soporta M3U8 / DASH + ClearKey</footer>
+    
+    <div id="errorMsg" class="error-box"></div>
+    
+    <footer>Soporte DASH/HLS/ClearKey · Datos remotos desde GitHub</footer>
 </div>
 
 <script>
-    // Configuración: URLs de los JSON (RAW de GitHub)
-    const REPO_BASE = "https://raw.githubusercontent.com/killermina/prueba/main/";
-    const JSON_FILES = ["common.json", "comunJakare.json"];
+    // Configuración de GitHub
+    const REPO = "https://raw.githubusercontent.com/killermina/prueba/main/";
+    const FILES = ["common.json", "comunJakare.json"];
 
-    // Variables globales
-    let allCategories = [];          // { type, image, title, items[] }
-    let shakaPlayer = null;
-    let currentVideo = null;
-    let currentItem = null;
-    let activeCategoryIndex = 0;
-    let activeChannelId = null;
-    let currentRequestFilter = null;   // para headers personalizados
+    let player = null;
+    let video = document.getElementById('video');
+    let allData = [];
 
-    // Elementos DOM
-    const videoEl = document.getElementById('video-player');
-    const categoriesContainer = document.getElementById('categoriesContainer');
-    const channelsGrid = document.getElementById('channelsGrid');
-    const loadingOverlay = document.getElementById('loadingOverlay');
-    const errorMsgDiv = document.getElementById('errorMessage');
-    const currentChannelNameSpan = document.getElementById('currentChannelName');
-    const drmStatusSpan = document.getElementById('drmStatus');
-    const connectionStatusSpan = document.getElementById('connectionStatus');
-
-    // Inicializar Shaka Player
-    function initShaka() {
-        return new Promise((resolve, reject) => {
-            if (shakaPlayer) {
-                shakaPlayer.destroy();
-                shakaPlayer = null;
-            }
-            if (!shaka.Player.isBrowserSupported()) {
-                reject(new Error("Tu navegador no soporta tecnología de reproducción necesaria."));
-                return;
-            }
-            shakaPlayer = new shaka.Player(videoEl);
-            // Configuración global: permitir CORS, etc.
-            shakaPlayer.configure({
-                streaming: {
-                    bufferingGoal: 10,
-                    rebufferingGoal: 5,
-                    alwaysStreamText: false,
-                },
-                drm: {
-                    retryParameters: { maxAttempts: 3 },
-                    clearKeys: {},   // dinámico
-                },
-                manifest: {
-                    dash: {
-                        ignoreMinBufferTime: true,
-                    }
-                }
-            });
-            // Eventos útiles
-            shakaPlayer.addEventListener('error', onShakaError);
-            shakaPlayer.addEventListener('loading', () => showLoading(true));
-            shakaPlayer.addEventListener('loaded', () => showLoading(false));
-            shakaPlayer.addEventListener('buffering', (e) => showLoading(e.buffering));
-            shakaPlayer.addEventListener('trackschanged', () => console.log("Tracks cambiados"));
-            resolve(shakaPlayer);
+    // 1. Inicializar Shaka Player
+    async function initPlayer() {
+        shaka.polyfill.installAll();
+        if (!shaka.Player.isBrowserSupported()) {
+            alert("Navegador no compatible");
+            return;
+        }
+        player = new shaka.Player(video);
+        player.addEventListener('error', (e) => {
+            console.error("Error Shaka:", e.detail.code);
+            document.getElementById('errorMsg').innerText = "Error " + e.detail.code + ": Revisa la señal en el JSON.";
+            document.getElementById('errorMsg').style.display = "block";
+            document.getElementById('loader').style.display = "none";
         });
     }
 
-    function showLoading(show) {
-        loadingOverlay.style.display = show ? 'flex' : 'none';
-    }
-
-    function hideError() {
-        errorMsgDiv.style.display = 'none';
-        errorMsgDiv.innerText = '';
-    }
-
-    function showError(msg) {
-        errorMsgDiv.innerText = msg;
-        errorMsgDiv.style.display = 'block';
-        setTimeout(() => {
-            if (errorMsgDiv.innerText === msg) errorMsgDiv.style.display = 'none';
-        }, 8000);
-    }
-
-    function onShakaError(event) {
-        console.error("Shaka error", event);
-        let errorMsg = "Error de reproducción";
-        if (event.detail && event.detail.error) {
-            errorMsg = event.detail.error.message || event.detail.error.code;
-        }
-        showError(`❌ ${errorMsg}. Verifica la señal o DRM.`);
-        showLoading(false);
-        drmStatusSpan.innerText = "";
-    }
-
-    // Limpiar filtros de red (headers)
-    function clearNetworkFilters() {
-        if (!shakaPlayer) return;
-        const netEngine = shakaPlayer.getNetworkingEngine();
-        if (!netEngine) return;
-        if (currentRequestFilter) {
-            netEngine.unregisterRequestFilter(currentRequestFilter);
-            currentRequestFilter = null;
-        }
-    }
-
-    // Agregar headers y user-agent personalizados
-    function addCustomHeaders(headersArray, customUserAgent) {
-        if (!shakaPlayer) return;
-        clearNetworkFilters();
-        const netEngine = shakaPlayer.getNetworkingEngine();
-        if (!netEngine) return;
-        const filter = (type, request) => {
-            // Aplicar headers a todas las solicitudes (manifiesto, segmentos, licencias)
-            if (headersArray && Array.isArray(headersArray)) {
-                for (const h of headersArray) {
-                    if (h.name && h.value) {
-                        request.headers[h.name] = h.value;
-                    }
-                }
-            }
-            if (customUserAgent && typeof customUserAgent === 'string') {
-                request.headers['User-Agent'] = customUserAgent;
-            }
-        };
-        netEngine.registerRequestFilter(filter);
-        currentRequestFilter = filter;
-    }
-
-    // Reproducir item (canal)
-    async function playChannel(item, categoryTitle) {
-        if (!item || !item.url) {
-            showError("Canal sin URL válida.");
-            return;
-        }
-        hideError();
-        showLoading(true);
-        drmStatusSpan.innerText = "";
-        currentItem = item;
-        currentChannelNameSpan.innerText = `${item.name || "Canal"} ${categoryTitle ? `· ${categoryTitle}` : ''}`;
-
+    // 2. Cargar JSONs dinámicamente
+    async function loadData() {
         try {
-            // 1. Detener reproducción actual y limpiar filtros previos
-            if (shakaPlayer) {
-                await shakaPlayer.unload();
-                clearNetworkFilters();
+            for (const file of FILES) {
+                const res = await fetch(REPO + file);
+                const data = await res.json();
+                if (Array.isArray(data)) allData.push(...data);
             }
-            // 2. Configurar headers y user-agent si existen
-            let userAgent = item.user || null;
-            let headersList = item.headers || null;
-            if (headersList || userAgent) {
-                addCustomHeaders(headersList, userAgent);
+            
+            const categories = allData.filter(c => c.type === "category");
+            if (categories.length > 0) {
+                renderCategories(categories);
+                renderChannels(categories[0].title);
+                document.getElementById('loadingStatus').innerText = "En línea";
+            }
+        } catch (err) {
+            console.error("Error cargando datos:", err);
+            document.getElementById('loadingStatus').innerText = "Error de conexión";
+        }
+    }
+
+    // 3. Renderizar Interfaz
+    function renderCategories(cats) {
+        const container = document.getElementById('catContainer');
+        container.innerHTML = '';
+        cats.forEach((cat, index) => {
+            const btn = document.createElement('button');
+            btn.className = 'cat-btn' + (index === 0 ? ' active' : '');
+            btn.innerText = cat.title;
+            btn.onclick = () => {
+                document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                renderChannels(cat.title);
+            };
+            container.appendChild(btn);
+        });
+    }
+
+    function renderChannels(title) {
+        const grid = document.getElementById('chanGrid');
+        grid.innerHTML = '';
+        const category = allData.find(c => c.title === title);
+        
+        category.items.forEach(item => {
+            const card = document.createElement('div');
+            card.className = 'card';
+            card.tabIndex = 0;
+            card.innerHTML = `
+                <img src="${item.icono || 'https://via.placeholder.com/150x84/111/333?text=TV'}" onerror="this.src='https://via.placeholder.com/150x84/111/333?text=TV'">
+                <div class="card-name">${item.name}</div>
+            `;
+            card.onclick = () => play(item);
+            card.onkeydown = (e) => { if(e.key === 'Enter') play(item); };
+            grid.appendChild(card);
+        });
+    }
+
+    // 4. Lógica de Reproducción (Solución Error 1002)
+    async function play(item) {
+        if (!item.url) return;
+        
+        document.getElementById('loader').style.display = "flex";
+        document.getElementById('errorMsg').style.display = "none";
+        
+        try {
+            await player.unload();
+
+            // Configurar Headers si existen en el JSON
+            const netEngine = player.getNetworkingEngine();
+            netEngine.clearRequestFilters();
+            if (item.headers || item.user) {
+                netEngine.registerRequestFilter((type, request) => {
+                    if (item.headers) item.headers.forEach(h => request.headers[h.name] = h.value);
+                    if (item.user) request.headers['User-Agent'] = item.user;
+                });
             }
 
-            const url = item.url;
-            const isMpd = url.includes('.mpd') || (item.type && item.type.toUpperCase() === 'CLEARKEY');
-            const isM3u8 = url.includes('.m3u8') || (item.type && item.type.toUpperCase() === 'HLS');
-            const isClearKey = (item.type && item.type.toUpperCase() === 'CLEARKEY') && item.drm_license_uri;
-
-            // 3. Configuración DRM si es ClearKey DASH
-            if (isClearKey && (isMpd || url.includes('.mpd'))) {
-                drmStatusSpan.innerText = "🔐 DRM ClearKey activo";
-                // Configurar servidor ClearKey para Shaka
-                shakaPlayer.configure({
-                    drm: {
-                        servers: {
-                            'org.w3.clearkey': item.drm_license_uri
-                        },
-                        clearKeys: {},  // limpiar previos
-                        retryParameters: { maxAttempts: 2 }
-                    }
+            // Configurar DRM ClearKey si aplica
+            if (item.type === "CLEARKEY" && item.drm_license_uri) {
+                player.configure({
+                    drm: { servers: { 'org.w3.clearkey': item.drm_license_uri } }
                 });
             } else {
-                // Sin DRM, resetear configuración
-                shakaPlayer.configure({
-                    drm: {
-                        servers: {},
-                        clearKeys: {}
-                    }
-                });
-                drmStatusSpan.innerText = "📺 Sin DRM";
+                player.configure({ drm: { servers: {} } });
             }
 
-            // 4. Cargar manifiesto
-            await shakaPlayer.load(url);
-            showLoading(false);
-            console.log(`Reproduciendo: ${item.name} - ${url}`);
-
-            // Auto-play ya está por defecto con autoplay
-            videoEl.play().catch(e => console.warn("autoplay bloqueado", e));
-
-        } catch (error) {
-            showLoading(false);
-            console.error("Error al cargar stream:", error);
-            let friendlyMsg = `No se pudo cargar ${item.name}. `;
-            if (error.message) friendlyMsg += error.message;
-            showError(friendlyMsg);
-            drmStatusSpan.innerText = "⚠️ Error";
+            await player.load(item.url);
+            document.getElementById('loader').style.display = "none";
+            video.play();
+        } catch (e) {
+            console.error("Fallo al cargar canal:", e);
         }
     }
 
-    // Cargar y combinar ambos JSON desde GitHub
-    async function loadAllChannels() {
-        connectionStatusSpan.innerText = "🔄 sincronizando...";
-        let allItemsRaw = [];
-        for (const file of JSON_FILES) {
-            try {
-                const response = await fetch(REPO_BASE + file);
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                const data = await response.json();
-                if (Array.isArray(data)) {
-                    allItemsRaw.push(...data);
-                } else {
-                    console.warn(`${file} no es array, se omite`);
-                }
-            } catch (err) {
-                console.error(`Error cargando ${file}:`, err);
-                connectionStatusSpan.innerText = `⚠️ Error: ${file}`;
-            }
-        }
-
-        if (allItemsRaw.length === 0) {
-            connectionStatusSpan.innerText = "❌ Sin canales - verifica GitHub";
-            showError("No se pudieron cargar los archivos JSON. Revisa la conexión.");
-            return false;
-        }
-
-        // Limpiar categorías previas
-        allCategories = [];
-        const categoryMap = new Map();
-
-        for (const cat of allItemsRaw) {
-            if (cat.type === "category" && cat.title && Array.isArray(cat.items)) {
-                // Evitar duplicados exactos del título (si se repite, combinamos items)
-                if (categoryMap.has(cat.title)) {
-                    const existing = categoryMap.get(cat.title);
-                    existing.items.push(...cat.items);
-                } else {
-                    const newCat = {
-                        title: cat.title,
-                        image: cat.image || "",
-                        items: [...cat.items]
-                    };
-                    categoryMap.set(cat.title, newCat);
-                    allCategories.push(newCat);
-                }
-            }
-        }
-
-        // Ordenar categorías por nombre para consistencia
-        allCategories.sort((a,b) => a.title.localeCompare(b.title));
-        
-        if (allCategories.length === 0) {
-            connectionStatusSpan.innerText = "⚠️ No hay categorías válidas";
-            return false;
-        }
-        
-        connectionStatusSpan.innerText = `✅ ${allCategories.length} categorías · ${totalChannelsCount()} canales`;
-        return true;
-    }
-
-    function totalChannelsCount() {
-        return allCategories.reduce((sum, cat) => sum + cat.items.length, 0);
-    }
-
-    // Renderizar botones de categorías + resaltar activa
-    function renderCategories(activeTitle) {
-        categoriesContainer.innerHTML = '';
-        allCategories.forEach((cat, idx) => {
-            const btn = document.createElement('button');
-            btn.className = 'category-btn';
-            if (cat.title === activeTitle) btn.classList.add('active');
-            btn.textContent = cat.title.length > 28 ? cat.title.slice(0,25)+'…' : cat.title;
-            btn.setAttribute('data-title', cat.title);
-            btn.addEventListener('click', (e) => {
-                e.preventDefault();
-                setActiveCategory(cat.title);
-            });
-            // soporte para teclado / TV
-            btn.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    setActiveCategory(cat.title);
-                }
-            });
-            categoriesContainer.appendChild(btn);
-        });
-        if (categoriesContainer.firstChild && activeTitle) {
-            const activeBtn = Array.from(categoriesContainer.children).find(btn => btn.getAttribute('data-title') === activeTitle);
-            if (activeBtn) activeBtn.focus();
-        }
-    }
-
-    // Renderizar grilla de canales según categoría seleccionada
-    function renderChannels(categoryTitle) {
-        const category = allCategories.find(c => c.title === categoryTitle);
-        if (!category) {
-            channelsGrid.innerHTML = '<div style="grid-column:1/-1; text-align:center;">Sin canales en esta categoría</div>';
-            return;
-        }
-        channelsGrid.innerHTML = '';
-        category.items.forEach((item, idx) => {
-            const card = document.createElement('div');
-            card.className = 'channel-card';
-            if (currentItem && currentItem.name === item.name && currentItem.url === item.url) {
-                card.classList.add('active-channel');
-            }
-            card.setAttribute('data-channel-idx', idx);
-            card.setAttribute('tabindex', '0');
-            // icono
-            const img = document.createElement('img');
-            img.className = 'channel-img';
-            img.src = item.icono || category.image || 'https://i.ibb.co/5X20hxjL/KN-copia-4.png';
-            img.onerror = () => { img.src = 'https://i.ibb.co/5X20hxjL/KN-copia-4.png'; };
-            img.alt = item.name;
-            const nameSpan = document.createElement('div');
-            nameSpan.className = 'channel-name';
-            nameSpan.textContent = item.name.length > 28 ? item.name.slice(0,25)+'…' : item.name;
-            card.appendChild(img);
-            card.appendChild(nameSpan);
-            card.addEventListener('click', async () => {
-                await playChannel(item, category.title);
-                highlightActiveChannel(category.title, item);
-            });
-            card.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    playChannel(item, category.title);
-                    highlightActiveChannel(category.title, item);
-                }
-            });
-            channelsGrid.appendChild(card);
-        });
-    }
-
-    function highlightActiveChannel(categoryTitle, item) {
-        // Actualizar estilo visual
-        document.querySelectorAll('.channel-card').forEach(card => card.classList.remove('active-channel'));
-        const cards = document.querySelectorAll('.channel-card');
-        const category = allCategories.find(c => c.title === categoryTitle);
-        if (category) {
-            const idx = category.items.findIndex(i => i.name === item.name && i.url === item.url);
-            if (idx !== -1 && cards[idx]) cards[idx].classList.add('active-channel');
-        }
-    }
-
-    async function setActiveCategory(title) {
-        activeCategoryIndex = allCategories.findIndex(c => c.title === title);
-        renderCategories(title);
-        renderChannels(title);
-        // reset mensaje si no hay stream activo
-        if (!currentItem) {
-            currentChannelNameSpan.innerText = `📺 ${title} · selecciona un canal`;
-        }
-    }
-
-    // Inicializar todo: cargar JSON, Shaka, UI
-    async function initApp() {
-        try {
-            const success = await loadAllChannels();
-            if (!success || allCategories.length === 0) {
-                connectionStatusSpan.innerText = "❌ Error crítico, sin canales";
-                return;
-            }
-            await initShaka();
-            const firstCategory = allCategories[0].title;
-            renderCategories(firstCategory);
-            renderChannels(firstCategory);
-            // opcional: precargar primer canal? No, esperar click
-            connectionStatusSpan.innerText = `📡 ${allCategories.length} cat · listo`;
-            // Manejo de errores de video nativo
-            videoEl.addEventListener('error', (e) => {
-                console.warn("Video element error", e);
-                if (currentItem) showError(`Error nativo en ${currentItem.name}`);
-            });
-        } catch (err) {
-            console.error("Fatal init", err);
-            connectionStatusSpan.innerText = "🔥 Error inicial";
-            showError("No se pudo iniciar el reproductor. Revisa consola.");
-        }
-    }
-
-    // Soporte para navegación por teclado/flechas en TV (navegación entre cards)
-    function setupTVNavigation() {
-        document.addEventListener('keydown', (e) => {
-            const activeElem = document.activeElement;
-            // navegar entre categorías con flechas izquierda/derecha si el foco está en categorías
-            if (activeElem && activeElem.classList && activeElem.classList.contains('category-btn')) {
-                const btns = Array.from(categoriesContainer.children);
-                let idx = btns.indexOf(activeElem);
-                if (e.key === 'ArrowRight') {
-                    e.preventDefault();
-                    if (idx < btns.length - 1) btns[idx+1].focus();
-                    else btns[0].focus();
-                } else if (e.key === 'ArrowLeft') {
-                    e.preventDefault();
-                    if (idx > 0) btns[idx-1].focus();
-                    else btns[btns.length-1].focus();
-                } else if (e.key === 'ArrowDown') {
-                    e.preventDefault();
-                    const firstCard = channelsGrid.querySelector('.channel-card');
-                    if (firstCard) firstCard.focus();
-                }
-            }
-            // navegación entre canales (grid)
-            else if (activeElem && activeElem.classList && activeElem.classList.contains('channel-card')) {
-                const cards = Array.from(channelsGrid.querySelectorAll('.channel-card'));
-                const currentIdx = cards.indexOf(activeElem);
-                const cols = Math.floor(channelsGrid.clientWidth / 160); // aprox columnas
-                const rowMove = cols > 0 ? cols : 4;
-                if (e.key === 'ArrowRight') {
-                    e.preventDefault();
-                    if (currentIdx < cards.length-1) cards[currentIdx+1].focus();
-                } else if (e.key === 'ArrowLeft') {
-                    e.preventDefault();
-                    if (currentIdx > 0) cards[currentIdx-1].focus();
-                } else if (e.key === 'ArrowDown') {
-                    e.preventDefault();
-                    let next = currentIdx + rowMove;
-                    if (next < cards.length) cards[next].focus();
-                    else if (cards.length) cards[cards.length-1].focus();
-                } else if (e.key === 'ArrowUp') {
-                    e.preventDefault();
-                    let prev = currentIdx - rowMove;
-                    if (prev >= 0) cards[prev].focus();
-                    else if (cards.length) cards[0].focus();
-                }
-            }
-        });
-    }
-
-    // Arrancar app
-    initApp().then(() => setupTVNavigation());
+    // Iniciar
+    initPlayer().then(loadData);
 </script>
+
 </body>
 </html>
