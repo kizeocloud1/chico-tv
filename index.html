@@ -3,180 +3,149 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chico TV - Premium</title>
+    <title>Chico TV - Web Player</title>
     <script src="https://cdn.jsdelivr.net/npm/shaka-player@4.14.10/dist/shaka-player.compiled.js"></script>
     <style>
-        :root { --primary: #ffeb3b; --bg: #0f0f0f; --panel: #1a1a1a; }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); color: white; margin: 0; display: flex; height: 100vh; overflow: hidden; }
-        
-        /* Sidebar Estilizada */
-        #sidebar { width: 320px; background: var(--panel); display: flex; flex-direction: column; border-right: 2px solid #333; }
-        .brand { padding: 20px; text-align: center; background: #000; border-bottom: 2px solid var(--primary); }
-        .brand h1 { margin: 0; color: var(--primary); font-size: 1.5rem; letter-spacing: 2px; }
-        
-        #menu-container { flex-grow: 1; overflow-y: auto; padding: 10px; }
-        .category-btn { width: 100%; padding: 12px; background: #252525; border: none; color: white; text-align: left; font-weight: bold; cursor: pointer; margin-bottom: 5px; border-radius: 4px; transition: 0.3s; }
-        .category-btn:hover { background: #333; border-left: 4px solid var(--primary); }
-        
-        .channel-list { display: none; margin-bottom: 15px; padding-left: 10px; }
-        .channel-list.active { display: block; }
-        .channel-item { display: flex; align-items: center; padding: 10px; cursor: pointer; border-radius: 4px; transition: 0.2s; font-size: 0.9rem; }
-        .channel-item:hover { background: #444; }
-        .channel-item img { width: 35px; height: 35px; margin-right: 12px; border-radius: 50%; object-fit: cover; background: #000; }
-
-        /* Contenedor Principal */
-        #main { flex-grow: 1; display: flex; flex-direction: column; position: relative; }
-        #player-container { width: 100%; flex-grow: 1; background: #000; display: flex; align-items: center; justify-content: center; }
-        video { width: 100%; height: 100%; max-height: 80vh; outline: none; }
-        
-        .info-bar { padding: 20px; background: #111; border-top: 1px solid #333; }
-        .status-dot { height: 10px; width: 10px; border-radius: 50%; display: inline-block; margin-right: 8px; }
-        .online { background: #4CAF50; }
-
-        /* Loader */
-        #loader { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: none; }
-        .spinner { border: 4px solid rgba(255,255,255,0.1); border-left-color: var(--primary); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
-        @keyframes spin { to { transform: rotate(360vh); } }
+        :root { --accent: #ffeb3b; --bg-dark: #0a0a0a; --panel: #161616; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg-dark); color: white; margin: 0; display: flex; height: 100vh; }
+        #sidebar { width: 300px; background: var(--panel); border-right: 1px solid #333; overflow-y: auto; }
+        #main { flex: 1; display: flex; flex-direction: column; background: #000; }
+        .header { padding: 20px; text-align: center; border-bottom: 2px solid var(--accent); background: #000; }
+        .cat-btn { width: 100%; padding: 15px; border: none; background: #222; color: white; text-align: left; cursor: pointer; border-bottom: 1px solid #333; }
+        .chan-list { display: none; background: #111; }
+        .chan-item { display: flex; align-items: center; padding: 10px; cursor: pointer; transition: 0.2s; }
+        .chan-item:hover { background: #333; }
+        .chan-item img { width: 35px; height: 35px; border-radius: 5px; margin-right: 10px; }
+        #video-container { width: 100%; aspect-ratio: 16/9; background: #000; }
+        video { width: 100%; height: 100%; }
+        .active { display: block; }
+        .loading-overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: none; }
+        #error-msg { color: #ff5252; padding: 10px; font-size: 0.8rem; }
     </style>
 </head>
 <body>
 
 <div id="sidebar">
-    <div class="brand"><h1>CHICO TV</h1></div>
-    <div id="menu-container">
-        </div>
+    <div class="header"> <h2 style="margin:0; color:var(--accent)">CHICO TV</h2> </div>
+    <div id="menu"></div>
 </div>
 
 <div id="main">
-    <div id="player-container">
-        <div id="loader"><div class="spinner"></div></div>
-        <video id="videoPlayer" controls autoplay></video>
+    <div id="video-container">
+        <video id="video" controls autoplay></video>
+        <div id="loader" class="loading-overlay">Cargando...</div>
     </div>
-    <div class="info-bar">
-        <div style="display: flex; align-items: center;">
-            <span id="status" class="status-dot"></span>
-            <h2 id="current-name" style="margin: 0; font-size: 1.2rem;">Selecciona un canal</h2>
-        </div>
-        <p id="error-display" style="color: #ff5252; font-size: 0.8rem; margin: 5px 0 0 0;"></p>
+    <div style="padding: 20px;">
+        <h3 id="playing-title" style="margin:0">Selecciona un canal</h3>
+        <div id="error-msg"></div>
     </div>
 </div>
 
 <script>
-    const JSON_FILE = 'comunJakare.json'; 
     let player;
+    const JSON_DATA = 'comunJakare.json';
 
-    async function init() {
+    async function initPlayer() {
         shaka.polyfill.installAll();
-        if (!shaka.Player.isBrowserSupported()) {
-            alert('Tu navegador no es compatible con este reproductor.');
-            return;
-        }
-
-        const video = document.getElementById('videoPlayer');
+        const video = document.getElementById('video');
         player = new shaka.Player(video);
 
-        // Configuración de reintentos para evitar que se quede cargando
-        player.configure({
-            streaming: {
-                rebufferingGoal: 2,
-                bufferingGoal: 10,
-                retryParameters: { maxAttempts: 3, baseDelay: 1000, backoffFactor: 2 }
-            }
+        player.addEventListener('error', (e) => {
+            console.error('Error Shaka:', e.detail);
+            document.getElementById('error-msg').innerText = "Error de Fuente: Asegúrate que el link sea HTTPS y tenga CORS.";
         });
 
-        player.addEventListener('error', (e) => handleError(e.detail));
-        loadContent();
+        loadMenu();
     }
 
-    async function loadContent() {
+    async function loadMenu() {
         try {
-            const res = await fetch(JSON_FILE);
-            const data = await res.json();
-            const container = document.getElementById('menu-container');
+            const res = await fetch(JSON_DATA);
+            const categories = await res.json();
+            const menu = document.getElementById('menu');
 
-            data.forEach((cat, i) => {
+            categories.forEach((cat, i) => {
                 if (!cat.items || cat.items.length === 0) return;
-
+                
                 const btn = document.createElement('button');
-                btn.className = 'category-btn';
-                btn.innerText = cat.title || 'Categoría';
+                btn.className = 'cat-btn';
+                btn.innerText = cat.title;
                 btn.onclick = () => {
-                    document.querySelectorAll('.channel-list').forEach(l => l.classList.remove('active'));
-                    document.getElementById(`list-${i}`).classList.add('active');
+                    const lists = document.querySelectorAll('.chan-list');
+                    lists.forEach(l => l.classList.remove('active'));
+                    document.getElementById('list-' + i).classList.toggle('active');
                 };
 
                 const list = document.createElement('div');
-                list.className = 'channel-list';
-                list.id = `list-${i}`;
+                list.className = 'chan-list';
+                list.id = 'list-' + i;
 
                 cat.items.forEach(item => {
-                    const ch = document.createElement('div');
-                    ch.className = 'channel-item';
-                    ch.innerHTML = `<img src="${item.icono}" onerror="this.src='https://i.ibb.co/67Vth99Q/tv-Cico.png'"> <span>${item.name}</span>`;
-                    ch.onclick = () => playChannel(item);
-                    list.appendChild(ch);
+                    const div = document.createElement('div');
+                    div.className = 'chan-item';
+                    div.innerHTML = `<img src="${item.icono}"> <span>${item.name}</span>`;
+                    div.onclick = () => play(item);
+                    list.appendChild(div);
                 });
 
-                container.appendChild(btn);
-                container.appendChild(list);
+                menu.appendChild(btn);
+                menu.appendChild(list);
             });
-        } catch (e) {
-            console.error("Error cargando JSON:", e);
-        }
+        } catch (e) { console.error("Error cargando JSON", e); }
     }
 
-    async function playChannel(item) {
-        const loader = document.getElementById('loader');
-        const errDisp = document.getElementById('error-display');
-        loader.style.display = 'block';
-        errDisp.innerText = '';
-        document.getElementById('current-name').innerText = item.name;
-        document.getElementById('status').className = 'status-dot online';
+    // Función para convertir Base64 de las llaves a Hexadecimal (lo que pide el navegador)
+    function base64ToHex(base64) {
+        const raw = atob(base64.replace(/-/g, '+').replace(/_/g, '/'));
+        let result = '';
+        for (let i = 0; i < raw.length; i++) {
+            const hex = raw.charCodeAt(i).toString(16);
+            result += (hex.length === 2 ? hex : '0' + hex);
+        }
+        return result.toLowerCase();
+    }
 
-        // Reset DRM
+    async function play(item) {
+        document.getElementById('playing-title').innerText = item.name;
+        document.getElementById('error-msg').innerText = "";
+        
+        // Limpiar configuración previa
         player.configure({ drm: { clearKeys: {} } });
 
-        // Lógica de DRM ClearKey mejorada
         if (item.type === "CLEARKEY" && item.drm_license_uri) {
             try {
-                const response = await fetch(item.drm_license_uri);
-                const drmData = await response.json();
+                // Ajustar link de Dropbox para que sea descarga directa
+                let licenseUrl = item.drm_license_uri.replace('www.dropbox.com', 'dl.dropboxusercontent.com').replace('?dl=0', '?dl=1');
                 
-                // Mapeo automático de llaves (formato JWK a Hex que requiere Shaka)
+                const res = await fetch(licenseUrl);
+                const drmJson = await res.json();
+                
                 let keys = {};
-                if (drmData.keys) {
-                    drmData.keys.forEach(k => {
-                        // Convierte Base64/JWK a Hex si es necesario
-                        keys[k.kid.replace(/-/g, '')] = k.k.replace(/-/g, '');
+                // Si el formato es JWK (típico de Dropbox en tus archivos)
+                if (drmJson.keys) {
+                    drmJson.keys.forEach(k => {
+                        keys[base64ToHex(k.kid)] = base64ToHex(k.k);
                     });
                 } else {
-                    keys = drmData; // Si ya viene en formato {kid: k}
+                    keys = drmJson;
                 }
 
-                player.configure({ drm: { clearKeys: keys } });
-                console.log("DRM configurado con éxito para:", item.name);
+                player.configure({
+                    drm: { clearKeys: keys }
+                });
             } catch (e) {
-                console.warn("Fallo al obtener licencias DRM:", e);
+                console.warn("No se pudo aplicar ClearKey, intentando sin DRM...", e);
             }
         }
 
         try {
             await player.load(item.url);
-            loader.style.display = 'none';
         } catch (e) {
-            handleError(e);
+            console.error("Error cargando el video:", e);
         }
     }
 
-    function handleError(error) {
-        document.getElementById('loader').style.display = 'none';
-        document.getElementById('status').className = 'status-dot';
-        const msg = `Error ${error.code}: Ocurrió un problema con la fuente de video.`;
-        document.getElementById('error-display').innerText = msg;
-        console.error('Shaka Error:', error);
-    }
-
-    document.addEventListener('DOMContentLoaded', init);
+    document.addEventListener('DOMContentLoaded', initPlayer);
 </script>
 </body>
 </html>
