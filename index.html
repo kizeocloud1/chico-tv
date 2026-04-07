@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chico TV</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.3.5/shaka-player.compiled.debug.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    
+    <style>
+        :root {
+            --bg-color: #0a0a0a;
+            --accent-color: #ff8c00;
+            --text-color: #ffffff;
+            --card-bg: #1a1a1a;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            overflow: hidden; /* Evita scroll global en TV */
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        /* Header */
+        header {
+            padding: 20px;
+            background: linear-gradient(to bottom, #000, transparent);
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        header h1 {
+            color: var(--accent-color);
+            margin: 0;
+            font-size: 1.5rem;
+        }
+
+        /* Contenedor Principal */
+        main {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* Categorías Lateral (Optimizado TV) */
+        #categories {
+            width: 250px;
+            background-color: rgba(0,0,0,0.5);
+            overflow-y: auto;
+            padding: 10px;
+            border-right: 1px solid #333;
+        }
+
+        .category-item {
+            padding: 15px;
+            margin-bottom: 5px;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: 0.3s;
+            background: var(--card-bg);
+        }
+
+        .category-item:focus, .category-item.active {
+            background-color: var(--accent-color);
+            outline: none;
+            transform: scale(1.05);
+        }
+
+        /* Grilla de Canales */
+        #content {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 20px;
+            align-content: start;
+        }
+
+        .channel-card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: 0.3s;
+            text-align: center;
+            border: 2px solid transparent;
+        }
+
+        .channel-card:focus {
+            border-color: var(--accent-color);
+            transform: scale(1.1);
+            outline: none;
+        }
+
+        .channel-card img {
+            width: 100%;
+            aspect-ratio: 16/9;
+            object-fit: contain;
+            background: #000;
+        }
+
+        .channel-card p {
+            padding: 10px;
+            margin: 0;
+            font-size: 0.9rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Overlay del Reproductor */
+        #player-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            display: none;
+            z-index: 1000;
+        }
+
+        video {
+            width: 100%;
+            height: 100%;
+        }
+
+        .close-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            border-radius: 5px;
+            z-index: 1001;
+        }
+
+        /* Responsive Móvil */
+        @media (max-width: 768px) {
+            main { flex-direction: column; }
+            #categories { 
+                width: 100%; 
+                height: 60px; 
+                display: flex; 
+                flex-direction: row; 
+                overflow-x: auto; 
+                border-right: none;
+                border-bottom: 1px solid #333;
+            }
+            .category-item { margin-right: 10px; white-space: nowrap; padding: 10px; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>CHICO TV</h1>
+    </header>
+
+    <main>
+        <div id="categories" tabindex="-1">
+            </div>
+        <div id="content" tabindex="-1">
+            </div>
+    </main>
+
+    <div id="player-overlay">
+        <button class="close-btn" onclick="closePlayer()">VOLVER (BACK)</button>
+        <video id="video-player" controls autoplay></video>
+    </div>
+
+    <script>
+        // URLs de tus archivos en GitHub (usando el dominio raw para acceso directo)
+        const jsonUrls = [
+            'https://raw.githubusercontent.com/killermina/prueba/main/common.json',
+            'https://raw.githubusercontent.com/killermina/prueba/main/comunJakare.json'
+        ];
+
+        let allData = [];
+        let player;
+
+        async function initApp() {
+            try {
+                // Carga paralela de ambos archivos JSON
+                const responses = await Promise.all(jsonUrls.map(url => fetch(url)));
+                const datasets = await Promise.all(responses.map(res => res.json()));
+                
+                // Unificar datos evitando duplicados por título de categoría
+                allData = datasets.flat();
+                renderCategories();
+                initShaka();
+            } catch (error) {
+                console.error("Error cargando los archivos:", error);
+                alert("Error al conectar con GitHub");
+            }
+        }
+
+        function renderCategories() {
+            const container = document.getElementById('categories');
+            container.innerHTML = '';
+            
+            allData.forEach((cat, index) => {
+                const div = document.createElement('div');
+                div.className = 'category-item';
+                div.innerText = cat.title;
+                div.tabIndex = 0; // Habilitar foco para TV
+                div.onclick = () => renderChannels(cat.items, div);
+                
+                // Evento para navegación con control remoto
+                div.onkeydown = (e) => {
+                    if (e.key === 'Enter') renderChannels(cat.items, div);
+                };
+
+                container.appendChild(div);
+                if (index === 0) renderChannels(cat.items, div); // Cargar la primera por defecto
+            });
+        }
+
+        function renderChannels(items, element) {
+            // Manejo de estado visual
+            document.querySelectorAll('.category-item').forEach(i => i.classList.remove('active'));
+            element.classList.add('active');
+
+            const container = document.getElementById('content');
+            container.innerHTML = '';
+
+            items.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'channel-card';
+                card.tabIndex = 0;
+                card.innerHTML = `
+                    <img src="${item.icono}" onerror="this.src='https://via.placeholder.com/150x90?text=TV'">
+                    <p>${item.name}</p>
+                `;
+                
+                card.onclick = () => playStream(item);
+                card.onkeydown = (e) => {
+                    if (e.key === 'Enter') playStream(item);
+                };
+
+                container.appendChild(card);
+            });
+        }
+
+        async function initShaka() {
+            shaka.polyfill.installAll();
+            if (shaka.Player.isBrowserSupported()) {
+                player = new shaka.Player(document.getElementById('video-player'));
+                player.addEventListener('error', onPlayerError);
+            } else {
+                console.error('El navegador no soporta Shaka Player');
+            }
+        }
+
+        async function playStream(item) {
+            if (item.type === 'webview') {
+                window.open(item.url, '_blank');
+                return;
+            }
+
+            const video = document.getElementById('video-player');
+            const overlay = document.getElementById('player-overlay');
+            overlay.style.display = 'block';
+
+            // Configuración de DRM si existe
+            const config = { drm: { servers: {} } };
+            
+            if (item.type === 'CLEARKEY' || item.drm_license_uri) {
+                // Configuración para ClearKey según el formato de tus JSON
+                config.drm.servers['org.w3.clearkey'] = item.drm_license_uri;
+            }
+
+            try {
+                await player.configure(config);
+                await player.load(item.url);
+                video.play();
+            } catch (e) {
+                // Intento de fallback con HLS.js si Shaka falla (para .m3u8 simples)
+                if (item.url.includes('m3u8') && Hls.isSupported()) {
+                    const hls = new Hls();
+                    hls.loadSource(item.url);
+                    hls.attachMedia(video);
+                } else {
+                    onPlayerError(e);
+                }
+            }
+        }
+
+        function closePlayer() {
+            const video = document.getElementById('video-player');
+            const overlay = document.getElementById('player-overlay');
+            player.unload();
+            video.pause();
+            overlay.style.display = 'none';
+        }
+
+        function onPlayerError(event) {
+            console.error('Error de reproducción:', event);
+        }
+
+        // Manejo básico de teclado para Android TV (D-pad)
+        document.addEventListener('keydown', (e) => {
+            const active = document.activeElement;
+            if (e.key === 'Escape') closePlayer();
+        });
+
+        initApp();
+    </script>
+</body>
+</html>
