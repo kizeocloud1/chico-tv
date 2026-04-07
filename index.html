@@ -3,129 +3,180 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chico TV - En Vivo</title>
+    <title>Chico TV - Premium</title>
     <script src="https://cdn.jsdelivr.net/npm/shaka-player@4.14.10/dist/shaka-player.compiled.js"></script>
     <style>
-        body { font-family: sans-serif; background: #121212; color: white; margin: 0; display: flex; height: 100vh; }
-        #sidebar { width: 300px; background: #1e1e1e; overflow-y: auto; border-right: 1px solid #333; }
-        #main { flex-grow: 1; display: flex; flex-direction: column; }
-        #player-container { width: 100%; aspect-ratio: 16/9; background: black; }
-        video { width: 100%; height: 100%; }
-        .category { padding: 15px; background: #2a2a2a; border-bottom: 1px solid #333; cursor: pointer; }
-        .category:hover { background: #3d3d3d; }
-        .channel-list { display: none; padding: 10px; background: #1a1a1a; }
-        .channel-item { display: flex; align-items: center; padding: 8px; cursor: pointer; border-radius: 4px; margin-bottom: 5px; }
-        .channel-item:hover { background: #333; }
-        .channel-item img { width: 30px; height: 30px; margin-right: 10px; border-radius: 4px; }
-        .active { display: block; }
-        h1 { font-size: 1.2rem; padding: 20px; margin: 0; background: #000; color: #ffeb3b; text-align: center; }
+        :root { --primary: #ffeb3b; --bg: #0f0f0f; --panel: #1a1a1a; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); color: white; margin: 0; display: flex; height: 100vh; overflow: hidden; }
+        
+        /* Sidebar Estilizada */
+        #sidebar { width: 320px; background: var(--panel); display: flex; flex-direction: column; border-right: 2px solid #333; }
+        .brand { padding: 20px; text-align: center; background: #000; border-bottom: 2px solid var(--primary); }
+        .brand h1 { margin: 0; color: var(--primary); font-size: 1.5rem; letter-spacing: 2px; }
+        
+        #menu-container { flex-grow: 1; overflow-y: auto; padding: 10px; }
+        .category-btn { width: 100%; padding: 12px; background: #252525; border: none; color: white; text-align: left; font-weight: bold; cursor: pointer; margin-bottom: 5px; border-radius: 4px; transition: 0.3s; }
+        .category-btn:hover { background: #333; border-left: 4px solid var(--primary); }
+        
+        .channel-list { display: none; margin-bottom: 15px; padding-left: 10px; }
+        .channel-list.active { display: block; }
+        .channel-item { display: flex; align-items: center; padding: 10px; cursor: pointer; border-radius: 4px; transition: 0.2s; font-size: 0.9rem; }
+        .channel-item:hover { background: #444; }
+        .channel-item img { width: 35px; height: 35px; margin-right: 12px; border-radius: 50%; object-fit: cover; background: #000; }
+
+        /* Contenedor Principal */
+        #main { flex-grow: 1; display: flex; flex-direction: column; position: relative; }
+        #player-container { width: 100%; flex-grow: 1; background: #000; display: flex; align-items: center; justify-content: center; }
+        video { width: 100%; height: 100%; max-height: 80vh; outline: none; }
+        
+        .info-bar { padding: 20px; background: #111; border-top: 1px solid #333; }
+        .status-dot { height: 10px; width: 10px; border-radius: 50%; display: inline-block; margin-right: 8px; }
+        .online { background: #4CAF50; }
+
+        /* Loader */
+        #loader { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: none; }
+        .spinner { border: 4px solid rgba(255,255,255,0.1); border-left-color: var(--primary); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360vh); } }
     </style>
 </head>
 <body>
 
 <div id="sidebar">
-    <h1>CHICO TV</h1>
+    <div class="brand"><h1>CHICO TV</h1></div>
     <div id="menu-container">
         </div>
 </div>
 
 <div id="main">
     <div id="player-container">
+        <div id="loader"><div class="spinner"></div></div>
         <video id="videoPlayer" controls autoplay></video>
     </div>
-    <div id="channel-info" style="padding: 20px;">
-        <h2 id="current-channel-name">Selecciona un canal</h2>
+    <div class="info-bar">
+        <div style="display: flex; align-items: center;">
+            <span id="status" class="status-dot"></span>
+            <h2 id="current-name" style="margin: 0; font-size: 1.2rem;">Selecciona un canal</h2>
+        </div>
+        <p id="error-display" style="color: #ff5252; font-size: 0.8rem; margin: 5px 0 0 0;"></p>
     </div>
 </div>
 
 <script>
-    const JSON_URL = 'comunJakare.json'; // O 'common.json'
+    const JSON_FILE = 'comunJakare.json'; 
     let player;
 
-    async function initApp() {
+    async function init() {
         shaka.polyfill.installAll();
-        if (shaka.Player.isBrowserSupported()) {
-            player = new shaka.Player(document.getElementById('videoPlayer'));
-            player.addEventListener('error', onErrorEvent);
-            loadMenu();
-        } else {
-            console.error('Navegador no soportado');
+        if (!shaka.Player.isBrowserSupported()) {
+            alert('Tu navegador no es compatible con este reproductor.');
+            return;
         }
+
+        const video = document.getElementById('videoPlayer');
+        player = new shaka.Player(video);
+
+        // Configuración de reintentos para evitar que se quede cargando
+        player.configure({
+            streaming: {
+                rebufferingGoal: 2,
+                bufferingGoal: 10,
+                retryParameters: { maxAttempts: 3, baseDelay: 1000, backoffFactor: 2 }
+            }
+        });
+
+        player.addEventListener('error', (e) => handleError(e.detail));
+        loadContent();
     }
 
-    async function loadMenu() {
+    async function loadContent() {
         try {
-            const response = await fetch(JSON_URL);
-            const data = await response.json();
+            const res = await fetch(JSON_FILE);
+            const data = await res.json();
             const container = document.getElementById('menu-container');
 
-            data.forEach((cat, index) => {
-                const catDiv = document.createElement('div');
-                catDiv.className = 'category';
-                catDiv.innerText = cat.title;
-                catDiv.onclick = () => {
-                    const lists = document.querySelectorAll('.channel-list');
-                    lists.forEach(l => l.classList.remove('active'));
-                    document.getElementById(`cat-${index}`).classList.add('active');
+            data.forEach((cat, i) => {
+                if (!cat.items || cat.items.length === 0) return;
+
+                const btn = document.createElement('button');
+                btn.className = 'category-btn';
+                btn.innerText = cat.title || 'Categoría';
+                btn.onclick = () => {
+                    document.querySelectorAll('.channel-list').forEach(l => l.classList.remove('active'));
+                    document.getElementById(`list-${i}`).classList.add('active');
                 };
 
-                const listDiv = document.createElement('div');
-                listDiv.className = 'channel-list';
-                listDiv.id = `cat-${index}`;
+                const list = document.createElement('div');
+                list.className = 'channel-list';
+                list.id = `list-${i}`;
 
                 cat.items.forEach(item => {
-                    const chanDiv = document.createElement('div');
-                    chanDiv.className = 'channel-item';
-                    chanDiv.innerHTML = `<img src="${item.icono}" onerror="this.src='https://via.placeholder.com/30'"> <span>${item.name}</span>`;
-                    chanDiv.onclick = () => playChannel(item);
-                    listDiv.appendChild(chanDiv);
+                    const ch = document.createElement('div');
+                    ch.className = 'channel-item';
+                    ch.innerHTML = `<img src="${item.icono}" onerror="this.src='https://i.ibb.co/67Vth99Q/tv-Cico.png'"> <span>${item.name}</span>`;
+                    ch.onclick = () => playChannel(item);
+                    list.appendChild(ch);
                 });
 
-                container.appendChild(catDiv);
-                container.appendChild(listDiv);
+                container.appendChild(btn);
+                container.appendChild(list);
             });
         } catch (e) {
-            console.error("Error cargando el JSON", e);
+            console.error("Error cargando JSON:", e);
         }
     }
 
     async function playChannel(item) {
-        document.getElementById('current-channel-name').innerText = item.name;
-        
-        // Configuración de DRM si es CLEARKEY
+        const loader = document.getElementById('loader');
+        const errDisp = document.getElementById('error-display');
+        loader.style.display = 'block';
+        errDisp.innerText = '';
+        document.getElementById('current-name').innerText = item.name;
+        document.getElementById('status').className = 'status-dot online';
+
+        // Reset DRM
+        player.configure({ drm: { clearKeys: {} } });
+
+        // Lógica de DRM ClearKey mejorada
         if (item.type === "CLEARKEY" && item.drm_license_uri) {
             try {
-                const drmRes = await fetch(item.drm_license_uri);
-                const drmData = await drmRes.json();
-                // Shaka requiere el formato { 'hex_key_id': 'hex_key' }
-                player.configure({
-                    drm: { clearKeys: drmData.keys ? formatClearKeys(drmData.keys) : drmData }
-                });
+                const response = await fetch(item.drm_license_uri);
+                const drmData = await response.json();
+                
+                // Mapeo automático de llaves (formato JWK a Hex que requiere Shaka)
+                let keys = {};
+                if (drmData.keys) {
+                    drmData.keys.forEach(k => {
+                        // Convierte Base64/JWK a Hex si es necesario
+                        keys[k.kid.replace(/-/g, '')] = k.k.replace(/-/g, '');
+                    });
+                } else {
+                    keys = drmData; // Si ya viene en formato {kid: k}
+                }
+
+                player.configure({ drm: { clearKeys: keys } });
+                console.log("DRM configurado con éxito para:", item.name);
             } catch (e) {
-                console.warn("No se pudo cargar la licencia ClearKey", e);
+                console.warn("Fallo al obtener licencias DRM:", e);
             }
-        } else {
-            player.configure({ drm: { clearKeys: {} } }); // Limpiar si no es DRM
         }
 
         try {
             await player.load(item.url);
+            loader.style.display = 'none';
         } catch (e) {
-            onError(e);
+            handleError(e);
         }
     }
 
-    function formatClearKeys(keys) {
-        const ck = {};
-        keys.forEach(k => ck[k.kid.replace(/-/g, '')] = k.k.replace(/-/g, ''));
-        return ck;
+    function handleError(error) {
+        document.getElementById('loader').style.display = 'none';
+        document.getElementById('status').className = 'status-dot';
+        const msg = `Error ${error.code}: Ocurrió un problema con la fuente de video.`;
+        document.getElementById('error-display').innerText = msg;
+        console.error('Shaka Error:', error);
     }
 
-    function onErrorEvent(event) { onError(event.detail); }
-    function onError(error) { console.error('Error code', error.code, 'object', error); }
-
-    document.addEventListener('DOMContentLoaded', initApp);
+    document.addEventListener('DOMContentLoaded', init);
 </script>
-
 </body>
 </html>
