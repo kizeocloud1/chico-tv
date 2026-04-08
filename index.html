@@ -3,42 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chico TV Online</title>
+    <title>Chico TV - Web Fix</title>
     <script src="https://cdn.jsdelivr.net/npm/shaka-player@4.14.10/dist/shaka-player.compiled.js"></script>
     <style>
-        :root { --main-color: #ffeb3b; --bg: #000; --panel: #121212; }
-        body { font-family: sans-serif; background: var(--bg); color: white; margin: 0; display: flex; height: 100vh; }
-        #sidebar { width: 300px; background: var(--panel); border-right: 1px solid #333; display: flex; flex-direction: column; }
-        #main { flex: 1; position: relative; display: flex; flex-direction: column; }
-        .header { padding: 20px; text-align: center; border-bottom: 2px solid var(--main-color); }
-        #menu { flex: 1; overflow-y: auto; padding: 10px; }
-        .cat-group { margin-bottom: 10px; }
-        .cat-title { width: 100%; padding: 12px; background: #222; border: none; color: var(--main-color); text-align: left; cursor: pointer; font-weight: bold; border-radius: 5px; }
-        .chan-list { display: none; padding-top: 5px; }
-        .chan-list.active { display: block; }
-        .chan-item { display: flex; align-items: center; padding: 10px; cursor: pointer; border-radius: 4px; font-size: 14px; }
+        body { font-family: sans-serif; background: #000; color: #fff; margin: 0; display: flex; height: 100vh; }
+        #sidebar { width: 300px; background: #111; border-right: 1px solid #333; overflow-y: auto; }
+        #main { flex: 1; display: flex; flex-direction: column; }
+        .chan-item { padding: 10px; cursor: pointer; border-bottom: 1px solid #222; display: flex; align-items: center; }
         .chan-item:hover { background: #333; }
-        .chan-item img { width: 30px; height: 30px; margin-right: 10px; border-radius: 4px; object-fit: cover; }
-        #video-container { width: 100%; background: #000; position: relative; }
-        video { width: 100%; aspect-ratio: 16/9; outline: none; }
-        .info { padding: 20px; }
-        #error-log { color: #ff5252; font-size: 12px; margin-top: 10px; }
+        .chan-item img { width: 30px; height: 30px; margin-right: 10px; }
+        video { width: 100%; aspect-ratio: 16/9; background: #000; }
+        .error-box { padding: 15px; color: #ff5252; font-size: 13px; background: #1a0000; border: 1px solid red; margin: 10px; display: none; }
+        .badge { background: #ffeb3b; color: #000; padding: 2px 5px; font-size: 10px; font-weight: bold; border-radius: 3px; margin-left: 5px; }
     </style>
 </head>
 <body>
 
-<div id="sidebar">
-    <div class="header"> <h2 style="margin:0">CHICO TV</h2> </div>
-    <div id="menu"></div>
-</div>
-
+<div id="sidebar"><div id="menu"></div></div>
 <div id="main">
-    <div id="video-container">
-        <video id="video" controls autoplay></video>
-    </div>
-    <div class="info">
-        <h3 id="current-title" style="margin:0">Selecciona un canal</h3>
-        <div id="error-log"></div>
+    <video id="video" controls autoplay></video>
+    <div id="error-display" class="error-box"></div>
+    <div style="padding:20px;">
+        <h2 id="title">Selecciona un canal</h2>
+        <p id="debug-info" style="color: #888; font-size: 11px;"></p>
     </div>
 </div>
 
@@ -50,108 +37,106 @@
         const video = document.getElementById('video');
         player = new shaka.Player(video);
 
-        // Configuramos para que sea más tolerante a fallos de red (como en Android)
+        // CONFIGURACIÓN CRÍTICA: Ignorar errores de certificados y reintentar
         player.configure({
-            streaming: { 
-                retryParameters: { maxAttempts: 5 },
-                jumpLargeGaps: true
-            }
+            streaming: {
+                retryParameters: { maxAttempts: 3, baseDelay: 1000 },
+                lowLatencyMode: true,
+            },
+            manifest: { retryParameters: { maxAttempts: 3 } }
         });
 
-        player.addEventListener('error', onPlayerError);
-        loadData();
+        player.addEventListener('error', (e) => showError(e.detail));
+        loadList();
     }
 
-    async function loadData() {
-        try {
-            const res = await fetch('comunJakare.json');
-            const data = await res.json();
-            const menu = document.getElementById('menu');
-
-            data.forEach((cat, i) => {
-                const group = document.createElement('div');
-                group.className = 'cat-group';
-                
-                const btn = document.createElement('button');
-                btn.className = 'cat-title';
-                btn.innerText = cat.title;
-                btn.onclick = () => group.querySelector('.chan-list').classList.toggle('active');
-
-                const list = document.createElement('div');
-                list.className = 'chan-list';
-
-                cat.items.forEach(item => {
-                    const div = document.createElement('div');
-                    div.className = 'chan-item';
-                    div.innerHTML = `<img src="${item.icono || 'https://i.ibb.co/67Vth99Q/tv-Cico.png'}"> <span>${item.name}</span>`;
-                    div.onclick = () => play(item);
-                    list.appendChild(div);
-                });
-
-                group.appendChild(btn);
-                group.appendChild(list);
-                menu.appendChild(group);
+    async function loadList() {
+        const res = await fetch('comunJakare.json');
+        const data = await res.json();
+        const menu = document.getElementById('menu');
+        
+        data.forEach(cat => {
+            cat.items.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'chan-item';
+                const isHttp = item.url.startsWith('http:');
+                div.innerHTML = `
+                    <img src="${item.icono}"> 
+                    <span>${item.name}</span>
+                    ${isHttp ? '<span class="badge">HTTP</span>' : ''}
+                `;
+                div.onclick = () => play(item);
+                menu.appendChild(div);
             });
-        } catch (e) { console.error("Error JSON:", e); }
+        });
     }
 
-    // Convierte las llaves de Dropbox (Base64) al formato que Shaka entiende (Hex)
-    function decodeKey(b64) {
-        const bin = atob(b64.replace(/-/g, '+').replace(/_/g, '/'));
-        let hex = '';
-        for (let i = 0; i < bin.length; i++) {
-            const h = bin.charCodeAt(i).toString(16);
-            hex += (h.length === 1 ? '0' + h : h);
+    // Convertidor Base64 a Hex (Indispensable para ClearKey en Web)
+    function b64ToHex(str) {
+        const raw = atob(str.replace(/-/g, '+').replace(/_/g, '/'));
+        let result = '';
+        for (let i = 0; i < raw.length; i++) {
+            const hex = raw.charCodeAt(i).toString(16);
+            result += (hex.length === 2 ? hex : '0' + hex);
         }
-        return hex;
+        return result;
     }
 
     async function play(item) {
-        const errorLog = document.getElementById('error-log');
-        document.getElementById('current-title').innerText = item.name;
-        errorLog.innerText = "";
+        const errBox = document.getElementById('error-display');
+        const debug = document.getElementById('debug-info');
+        errBox.style.display = 'none';
+        document.getElementById('title').innerText = item.name;
+        debug.innerText = `URL: ${item.url}`;
 
-        // Reset DRM previo
+        // RESET DRM
         player.configure({ drm: { clearKeys: {} } });
 
-        // Si el link es HTTP y tu web HTTPS, avisamos
-        if (item.url.startsWith('http://') && window.location.protocol === 'https:') {
-            errorLog.innerText = "⚠️ Error: El navegador bloquea links HTTP en sitios HTTPS. Intenta usar Brave o desactivar 'Shields'.";
+        // 1. SOLUCIÓN MIXED CONTENT (HTTPS vs HTTP)
+        if (location.protocol === 'https:' && item.url.startsWith('http:')) {
+            showError({ code: "MIXED_CONTENT", message: "Bloqueado por seguridad: No puedes ver links HTTP en una web HTTPS (GitHub)." });
+            return;
         }
 
+        // 2. SOLUCIÓN DRM / DROPBOX
         if (item.type === "CLEARKEY" && item.drm_license_uri) {
             try {
-                // Forzamos descarga directa de Dropbox
-                const licenseUrl = item.drm_license_uri.replace('www.dropbox.com', 'dl.dropboxusercontent.com').replace('?dl=0', '?dl=1');
-                const res = await fetch(licenseUrl);
-                const drm = await res.json();
+                // Forzar descarga de Dropbox
+                const licUrl = item.drm_license_uri.replace('www.dropbox.com', 'dl.dropboxusercontent.com').replace('?dl=0', '?dl=1');
+                const response = await fetch(licUrl);
+                const drmData = await response.json();
                 
                 let keys = {};
-                if (drm.keys) {
-                    drm.keys.forEach(k => {
-                        keys[decodeKey(k.kid)] = decodeKey(k.k);
+                if (drmData.keys) {
+                    drmData.keys.forEach(k => {
+                        keys[b64ToHex(k.kid)] = b64ToHex(k.k);
                     });
                 }
-                
                 player.configure({ drm: { clearKeys: keys } });
             } catch (e) {
-                console.error("Error DRM:", e);
+                console.error("Error cargando llaves", e);
             }
         }
 
         try {
             await player.load(item.url);
         } catch (e) {
-            onPlayerError(e);
+            showError(e);
         }
     }
 
-    function onPlayerError(e) {
-        const error = e.detail || e;
-        document.getElementById('error-log').innerText = `Error ${error.code}: Problema de conexión o restricciones del navegador (CORS/HTTP).`;
+    function showError(error) {
+        const box = document.getElementById('error-display');
+        box.style.display = 'block';
+        if (error.code === 1002 || error.code === 1001) {
+            box.innerHTML = `<strong>Error de Red (CORS):</strong> El servidor del canal no permite la reproducción en webs externas. <br> <small>Prueba abriendo este archivo directamente desde tu PC (sin GitHub) o usa un navegador con CORS habilitado.</small>`;
+        } else {
+            box.innerText = `Error ${error.code}: ${error.message || 'Problema con la fuente'}`;
+        }
     }
 
     document.addEventListener('DOMContentLoaded', init);
 </script>
+
 </body>
 </html>
